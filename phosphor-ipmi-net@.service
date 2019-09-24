@@ -4,6 +4,8 @@ Requires=phosphor-ipmi-host.service
 After=phosphor-ipmi-host.service
 
 [Service]
+Environment=IPTABLESRULE=/var/lib/iptables_rules
+ExecStartPre=/usr/bin/env ipmi-net-firewall.sh
 ExecStart=/usr/bin/netipmid -c %i
 SyslogIdentifier=netipmid-%i
 Restart=always
