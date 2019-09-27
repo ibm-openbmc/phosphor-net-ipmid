@@ -84,27 +84,27 @@ int EventLoop::setupSocket(std::shared_ptr<sdbusplus::asio::connection>& bus,
             boost::asio::ip::udp::socket::reuse_address(true));
         udpSocket->bind(ep);
     }
-    // SO_BINDTODEVICE
-    char nameout[IFNAMSIZ];
-    unsigned int lenout = sizeof(nameout);
-    if ((::getsockopt(udpSocket->native_handle(), SOL_SOCKET, SO_BINDTODEVICE,
-                      nameout, &lenout) == -1))
-    {
-        log<level::ERR>("Failed to read bound device",
-                        entry("ERROR=%s", strerror(errno)));
-    }
-    if (iface != nameout && iface != unboundIface)
-    {
-        // SO_BINDTODEVICE
-        if ((::setsockopt(udpSocket->native_handle(), SOL_SOCKET,
-                          SO_BINDTODEVICE, iface.c_str(),
-                          iface.size() + 1) == -1))
-        {
-            log<level::ERR>("Failed to bind to requested interface",
-                            entry("ERROR=%s", strerror(errno)));
-            return EXIT_FAILURE;
-        }
-    }
+//    // SO_BINDTODEVICE
+//    char nameout[IFNAMSIZ];
+//    unsigned int lenout = sizeof(nameout);
+//    if ((::getsockopt(udpSocket->native_handle(), SOL_SOCKET, SO_BINDTODEVICE,
+//                      nameout, &lenout) == -1))
+//    {
+//        log<level::ERR>("Failed to read bound device",
+//                        entry("ERROR=%s", strerror(errno)));
+//    }
+//    if (iface != nameout && iface != unboundIface)
+//    {
+//        // SO_BINDTODEVICE
+//        if ((::setsockopt(udpSocket->native_handle(), SOL_SOCKET,
+//                          SO_BINDTODEVICE, iface.c_str(),
+//                          iface.size() + 1) == -1))
+//        {
+//            log<level::ERR>("Failed to bind to requested interface",
+//                            entry("ERROR=%s", strerror(errno)));
+//            return EXIT_FAILURE;
+//        }
+//    }
     // cannot be constexpr because it gets passed by address
     const int option_enabled = 1;
     // common socket stuff; set options to get packet info (DST addr)
