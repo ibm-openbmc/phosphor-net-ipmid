@@ -19,9 +19,15 @@ using namespace phosphor::logging;
 std::vector<uint8_t> activatePayload(const std::vector<uint8_t>& inPayload,
                                      const message::Handler& handler)
 {
-    std::vector<uint8_t> outPayload(sizeof(ActivatePayloadResponse));
     auto request =
         reinterpret_cast<const ActivatePayloadRequest*>(inPayload.data());
+    if (inPayload.size() != sizeof(*request))
+    {
+        std::vector<uint8_t> errorPayload{IPMI_CC_REQ_DATA_LEN_INVALID};
+        return errorPayload;
+    }
+
+    std::vector<uint8_t> outPayload(sizeof(ActivatePayloadResponse));
     auto response =
         reinterpret_cast<ActivatePayloadResponse*>(outPayload.data());
 
@@ -93,19 +99,18 @@ std::vector<uint8_t> activatePayload(const std::vector<uint8_t>& inPayload,
 std::vector<uint8_t> deactivatePayload(const std::vector<uint8_t>& inPayload,
                                        const message::Handler& handler)
 {
-    std::vector<uint8_t> outPayload(sizeof(DeactivatePayloadResponse));
     auto request =
         reinterpret_cast<const DeactivatePayloadRequest*>(inPayload.data());
+    if (inPayload.size() != sizeof(*request))
+    {
+        std::vector<uint8_t> errorPayload{IPMI_CC_REQ_DATA_LEN_INVALID};
+        return errorPayload;
+    }
+
+    std::vector<uint8_t> outPayload(sizeof(DeactivatePayloadResponse));
     auto response =
         reinterpret_cast<DeactivatePayloadResponse*>(outPayload.data());
-
     response->completionCode = IPMI_CC_OK;
-
-    if (inPayload.size() != sizeof(DeactivatePayloadRequest))
-    {
-        response->completionCode = IPMI_CC_REQ_DATA_LEN_INVALID;
-        return outPayload;
-    }
 
     // SOL is the payload currently supported for deactivation
     if (static_cast<uint8_t>(message::PayloadType::SOL) != request->payloadType)
@@ -174,9 +179,15 @@ std::vector<uint8_t> deactivatePayload(const std::vector<uint8_t>& inPayload,
 std::vector<uint8_t> getPayloadStatus(const std::vector<uint8_t>& inPayload,
                                       const message::Handler& handler)
 {
-    std::vector<uint8_t> outPayload(sizeof(GetPayloadStatusResponse));
     auto request =
         reinterpret_cast<const GetPayloadStatusRequest*>(inPayload.data());
+    if (inPayload.size() != sizeof(*request))
+    {
+        std::vector<uint8_t> errorPayload{IPMI_CC_REQ_DATA_LEN_INVALID};
+        return errorPayload;
+    }
+
+    std::vector<uint8_t> outPayload(sizeof(GetPayloadStatusResponse));
     auto response =
         reinterpret_cast<GetPayloadStatusResponse*>(outPayload.data());
 
@@ -200,9 +211,16 @@ std::vector<uint8_t> getPayloadStatus(const std::vector<uint8_t>& inPayload,
 std::vector<uint8_t> getPayloadInfo(const std::vector<uint8_t>& inPayload,
                                     const message::Handler& handler)
 {
-    std::vector<uint8_t> outPayload(sizeof(GetPayloadInfoResponse));
     auto request =
         reinterpret_cast<const GetPayloadInfoRequest*>(inPayload.data());
+
+    if (inPayload.size() != sizeof(*request))
+    {
+        std::vector<uint8_t> errorPayload{IPMI_CC_REQ_DATA_LEN_INVALID};
+        return errorPayload;
+    }
+
+    std::vector<uint8_t> outPayload(sizeof(GetPayloadInfoResponse));
     auto response =
         reinterpret_cast<GetPayloadInfoResponse*>(outPayload.data());
 
@@ -214,7 +232,7 @@ std::vector<uint8_t> getPayloadInfo(const std::vector<uint8_t>& inPayload,
     {
         response->completionCode = IPMI_CC_INVALID_FIELD_REQUEST;
         return outPayload;
-    }
+}
 
     auto status = std::get<sol::Manager&>(singletonPool)
                       .isPayloadActive(request->payloadInstance);
