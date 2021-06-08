@@ -97,11 +97,10 @@ std::shared_ptr<Message> unflatten(std::vector<uint8_t>& inPacket)
     message->isPacketEncrypted = false;
     message->isPacketAuthenticated = false;
 
-    auto payloadLen = header->payloadLength;
-
     // Confirm the number of data bytes received correlates to
     // the packet length in the header
-    if (inPacket.size() < (sizeof(SessionHeader_t) + payloadLen))
+    size_t payloadLen = header->payloadLength;
+    if ((payloadLen == 0) || (inPacket.size() < (sizeof(*header) + payloadLen)))
     {
         throw std::runtime_error("Invalid data length");
     }
@@ -169,7 +168,13 @@ std::shared_ptr<Message> unflatten(std::vector<uint8_t>& inPacket)
     message->isPacketAuthenticated =
         ((header->payloadType & PAYLOAD_AUTH_MASK) ? true : false);
 
-    auto payloadLen = endian::from_ipmi(header->payloadLength);
+    // Confirm the number of data bytes received correlates to
+    // the packet length in the header
+    size_t payloadLen = endian::from_ipmi(header->payloadLength);
+    if ((payloadLen == 0) || (inPacket.size() < (sizeof(*header) + payloadLen)))
+    {
+        throw std::runtime_error("Invalid data length");
+    }
 
     if (message->isPacketAuthenticated)
     {
