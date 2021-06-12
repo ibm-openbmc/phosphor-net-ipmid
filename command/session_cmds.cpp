@@ -5,6 +5,10 @@
 
 #include <ipmid/api.h>
 
+#include <chrono>
+
+using namespace std::chrono_literals;
+
 namespace command
 {
 
@@ -114,6 +118,8 @@ std::vector<uint8_t> closeSession(const std::vector<uint8_t>& inPayload,
     if (bmcSessionID == session::sessionZero)
     {
         response->completionCode = IPMI_CC_INVALID_SESSIONID;
+        std::get<session::Manager&>(singletonPool)
+            .scheduleSessionCleaner(100us);
     }
     else
     {
