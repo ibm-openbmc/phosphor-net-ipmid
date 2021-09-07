@@ -5,6 +5,10 @@
 
 #include <ipmid/api.h>
 
+#include <chrono>
+
+using namespace std::chrono_literals;
+
 namespace command
 {
 
@@ -12,10 +16,15 @@ std::vector<uint8_t>
     setSessionPrivilegeLevel(const std::vector<uint8_t>& inPayload,
                              const message::Handler& handler)
 {
-
-    std::vector<uint8_t> outPayload(sizeof(SetSessionPrivLevelResp));
     auto request =
         reinterpret_cast<const SetSessionPrivLevelReq*>(inPayload.data());
+    if (inPayload.size() != sizeof(*request))
+    {
+        std::vector<uint8_t> errorPayload{IPMI_CC_REQ_DATA_LEN_INVALID};
+        return errorPayload;
+    }
+
+    std::vector<uint8_t> outPayload(sizeof(SetSessionPrivLevelResp));
     auto response =
         reinterpret_cast<SetSessionPrivLevelResp*>(outPayload.data());
     response->completionCode = IPMI_CC_OK;
@@ -65,11 +74,42 @@ std::vector<uint8_t>
 std::vector<uint8_t> closeSession(const std::vector<uint8_t>& inPayload,
                                   const message::Handler& handler)
 {
-    std::vector<uint8_t> outPayload(sizeof(CloseSessionResponse));
+    // minimum inPayload size is reqSessionId (uint32_t)
+    // maximum inPayload size is struct CloseSessionRequest
+    if (inPayload.size() != sizeof(uint32_t) &&
+        inPayload.size() != sizeof(CloseSessionRequest))
+    {
+        std::vector<uint8_t> errorPayload{IPMI_CC_REQ_DATA_LEN_INVALID};
+        return errorPayload;
+    }
+
     auto request =
         reinterpret_cast<const CloseSessionRequest*>(inPayload.data());
+
+    std::vector<uint8_t> outPayload(sizeof(CloseSessionResponse));
     auto response = reinterpret_cast<CloseSessionResponse*>(outPayload.data());
     response->completionCode = IPMI_CC_OK;
+    uint32_t reqSessionId = request->sessionID;
+    uint8_t reqSessionHandle = session::invalidSessionHandle;
+
+    if (inPayload.size() == sizeof(CloseSessionRequest))
+    {
+        reqSessionHandle = request->sessionHandle;
+    }
+
+    if (reqSessionId == session::sessionZero &&
+        reqSessionHandle == session::invalidSessionHandle)
+    {
+        response->completionCode = IPMI_CC_INVALID_SESSIONID;
+        return outPayload;
+    }
+
+    if (inPayload.size() == sizeof(reqSessionId) &&
+        reqSessionId == session::sessionZero)
+    {
+        response->completionCode = IPMI_CC_INVALID_SESSIONID;
+        return outPayload;
+    }
 
     auto bmcSessionID = endian::from_ipmi(request->sessionID);
 
@@ -78,6 +118,8 @@ std::vector<uint8_t> closeSession(const std::vector<uint8_t>& inPayload,
     if (bmcSessionID == session::sessionZero)
     {
         response->completionCode = IPMI_CC_INVALID_SESSIONID;
+        std::get<session::Manager&>(singletonPool)
+            .scheduleSessionCleaner(100us);
     }
     else
     {

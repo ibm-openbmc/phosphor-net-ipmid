@@ -82,23 +82,34 @@ namespace ipmi15parser
 
 std::shared_ptr<Message> unflatten(std::vector<uint8_t>& inPacket)
 {
-    // Check if the packet has atleast the Session Header
     if (inPacket.size() < sizeof(SessionHeader_t))
     {
         throw std::runtime_error("IPMI1.5 Session Header Missing");
     }
 
-    auto message = std::make_shared<Message>();
-
     auto header = reinterpret_cast<SessionHeader_t*>(inPacket.data());
 
+    uint32_t sessionID = endian::from_ipmi(header->sessId);
+    if (sessionID != session::sessionZero)
+    {
+        throw std::runtime_error("IPMI1.5 session packets are unsupported");
+    }
+
+    auto message = std::make_shared<Message>();
+
     message->payloadType = PayloadType::IPMI;
-    message->bmcSessionID = endian::from_ipmi(header->sessId);
+    message->bmcSessionID = session::sessionZero;
     message->sessionSeqNum = endian::from_ipmi(header->sessSeqNum);
     message->isPacketEncrypted = false;
     message->isPacketAuthenticated = false;
 
-    auto payloadLen = header->payloadLength;
+    // Confirm the number of data bytes received correlates to
+    // the packet length in the header
+    size_t payloadLen = header->payloadLength;
+    if ((payloadLen == 0) || (inPacket.size() < (sizeof(*header) + payloadLen)))
+    {
+        throw std::runtime_error("Invalid data length");
+    }
 
     (message->payload)
         .assign(inPacket.data() + sizeof(SessionHeader_t),
@@ -151,19 +162,45 @@ std::shared_ptr<Message> unflatten(std::vector<uint8_t>& inPacket)
         throw std::runtime_error("IPMI2.0 Session Header Missing");
     }
 
-    auto message = std::make_shared<Message>();
-
     auto header = reinterpret_cast<SessionHeader_t*>(inPacket.data());
 
+    uint32_t sessionID = endian::from_ipmi(header->sessId);
+
+    auto session =
+        std::get<session::Manager&>(singletonPool).getSession(sessionID);
+    if (!session)
+    {
+        throw std::runtime_error("RMCP+ message from unknown session");
+    }
+
+    auto message = std::make_shared<Message>();
+
     message->payloadType = static_cast<PayloadType>(header->payloadType & 0x3F);
-    message->bmcSessionID = endian::from_ipmi(header->sessId);
+    message->bmcSessionID = sessionID;
     message->sessionSeqNum = endian::from_ipmi(header->sessSeqNum);
     message->isPacketEncrypted =
         ((header->payloadType & PAYLOAD_ENCRYPT_MASK) ? true : false);
     message->isPacketAuthenticated =
         ((header->payloadType & PAYLOAD_AUTH_MASK) ? true : false);
 
-    auto payloadLen = endian::from_ipmi(header->payloadLength);
+    // Confirm the number of data bytes received correlates to
+    // the packet length in the header
+    size_t payloadLen = endian::from_ipmi(header->payloadLength);
+    if ((payloadLen == 0) || (inPacket.size() < (sizeof(*header) + payloadLen)))
+    {
+        throw std::runtime_error("Invalid data length");
+    }
+
+    bool integrityMismatch =
+        session->isIntegrityAlgoEnabled() && !message->isPacketAuthenticated;
+    bool encryptMismatch =
+        session->isCryptAlgoEnabled() && !message->isPacketEncrypted;
+
+    if (sessionID != session::sessionZero &&
+        (integrityMismatch || encryptMismatch))
+    {
+        throw std::runtime_error("unencrypted or unauthenticated message");
+    }
 
     if (message->isPacketAuthenticated)
     {
@@ -274,6 +311,12 @@ bool verifyPacketIntegrity(const std::vector<uint8_t>& packet,
     auto paddingLen = 4 - ((payloadLen + 2) & 3);
 
     auto sessTrailerPos = sizeof(SessionHeader_t) + payloadLen + paddingLen;
+
+    // verify packet size includes trailer struct starts at sessTrailerPos
+    if (packet.size() < (sessTrailerPos + sizeof(SessionTrailer_t)))
+    {
+        return false;
+    }
 
     auto trailer = reinterpret_cast<const SessionTrailer_t*>(packet.data() +
                                                              sessTrailerPos);
